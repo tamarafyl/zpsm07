@@ -1,53 +1,49 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
 export default function HomeScreen({ navigation }) {
   const drawerNavigation = useNavigation();
+  const [tests, setTests] = useState([]);
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
         <TouchableOpacity onPress={() => drawerNavigation.openDrawer()} style={{ marginLeft: 15 }}>
-          <Text style={{ fontSize: 24 }}>☰</Text>
+          <Text style={{ fontSize: 24, fontFamily: 'Roboto-Regular' }}>☰</Text>
         </TouchableOpacity>
       ),
     });
   }, [navigation, drawerNavigation]);
 
+  // ============================
+  //  POBIERANIE LISTY TESTÓW
+  // ============================
+  useEffect(() => {
+    fetch("https://tgryl.pl/quiz/tests")
+      .then(res => res.json())
+      .then(data => setTests(data))
+      .catch(err => console.error("Błąd pobierania testów:", err));
+  }, []);
+
   return (
     <View style={styles.container}>
       <View style={styles.buttonsContainer}>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate('Test1')}
-        >
-          <Text style={styles.buttonText}>Title test #1</Text>
-          <Text style={styles.desc}>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate('Test2')}
-        >
-          <Text style={styles.buttonText}>Title test #2</Text>
-          <Text style={styles.desc}>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</Text>
-        </TouchableOpacity>
+        <FlatList
+          data={tests}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => navigation.navigate('Test', { id: item.id })}
+            >
+              <Text style={styles.buttonText}>{item.name}</Text>
+              <Text style={styles.desc}>{item.tags.join(", ")}</Text>
+            </TouchableOpacity>
+          )}
+        />
 
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate('Test3')}
-        >
-          <Text style={styles.buttonText}>Title test #3</Text>
-          <Text style={styles.desc}>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate('Test4')}
-        >
-          <Text style={styles.buttonText}>Title test #4</Text>
-          <Text style={styles.desc}>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</Text>
-        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
@@ -78,10 +74,12 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: 'Roboto-Bold',
   },
   desc: {
     fontSize: 14,
     marginTop: 6,
+    fontFamily: 'SplineSansMono-Regular',
   },
   footer: {
     padding: 16,
@@ -92,5 +90,6 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 16,
+    fontFamily: 'Roboto-Regular',
   },
 });

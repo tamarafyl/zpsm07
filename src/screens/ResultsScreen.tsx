@@ -1,54 +1,40 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from "react-native";
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation } from "@react-navigation/native";
 
-export default function ResultsScreen({ results = [] }: { results?: Array<{ testId: number, testName: string, points: number, date: string }> }) {
+export default function ResultsScreen() {
   const navigation = useNavigation();
-  const route = useRoute();
-  const { score = 0, testId = 1 } = route.params || {};
 
+  const [results, setResults] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Drawer завжди працює
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.openDrawer()} style={{ marginLeft: 15 }}>
-          <Text style={{ fontSize: 24 }}>☰</Text>
+          <Text style={{ fontSize: 24, fontFamily: "Roboto-Regular" }}>☰</Text>
         </TouchableOpacity>
       ),
     });
   }, [navigation]);
 
-  const testNames: Record<number, string> = {
-    1: "Dodawanie",
-    2: "Odejmowanie",
-    3: "Mnożenie",
-    4: "Dzielenie"
+  const fetchResults = async () => {
+    try {
+      const response = await fetch("https://tgryl.pl/quiz/results?last=20");
+      const data = await response.json();
+      setResults(data);
+    } catch (error) {
+      console.error("Błąd pobierania wyników:", error);
+    }
   };
 
-  // Преобразуємо результати у формат викладача
-  const displayResults = results && results.length > 0
-    ? results.map(r => ({
-        nick: "User", // можеш поставити реальний нік
-        score: route.params?.score || 0,
-        total: 10, // загальна кількість питань для тесту, або зберігати в TestScreen
-        type: testNames[route.params?.testId] || "Unknown",
-        date: r.date
-      }))
-    : [{
-        nick: "User",
-        score: score,
-        total: 10,
-        type: testNames[testId] || `Test ${testId}`,
-        date: new Date().toLocaleDateString()
-      }];
-
+  useEffect(() => {
+    fetchResults();
+  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // Тут можна додати логіку оновлення, наприклад перезавантаження з сервера
-    setTimeout(() => setRefreshing(false), 1000);
+    fetchResults().finally(() => setRefreshing(false));
   }, []);
 
   return (
@@ -64,7 +50,7 @@ export default function ResultsScreen({ results = [] }: { results?: Array<{ test
       </View>
 
       <FlatList
-        data={displayResults}
+        data={results}
         keyExtractor={(item, index) => `${item.nick}-${index}`}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         renderItem={({ item }) => (
@@ -73,7 +59,7 @@ export default function ResultsScreen({ results = [] }: { results?: Array<{ test
             <Text style={styles.cell}>{item.score}</Text>
             <Text style={styles.cell}>{item.total}</Text>
             <Text style={styles.cell}>{item.type}</Text>
-            <Text style={styles.cell}>{item.date}</Text>
+            <Text style={styles.cell}>{item.createdOn}</Text>
           </View>
         )}
       />
@@ -83,9 +69,37 @@ export default function ResultsScreen({ results = [] }: { results?: Array<{ test
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
-  title: { fontSize: 28, marginBottom: 20, fontWeight: "bold" },
-  tableHeader: { flexDirection: "row", borderBottomWidth: 2, paddingBottom: 10, marginBottom: 10 },
-  headerCell: { flex: 1, fontWeight: "bold", fontSize: 16 },
-  tableRow: { flexDirection: "row", paddingVertical: 8, borderBottomWidth: 1 },
-  cell: { flex: 1, fontSize: 16 },
+
+  title: {
+    fontSize: 28,
+    marginBottom: 20,
+    fontWeight: "bold",
+    fontFamily: "Roboto-Bold",
+  },
+
+  tableHeader: {
+    flexDirection: "row",
+    borderBottomWidth: 2,
+    paddingBottom: 10,
+    marginBottom: 10,
+  },
+
+  headerCell: {
+    flex: 1,
+    fontWeight: "bold",
+    fontSize: 16,
+    fontFamily: "Roboto-Bold",
+  },
+
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+
+  cell: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: "SplineSansMono-Regular",
+  },
 });
