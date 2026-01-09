@@ -1,10 +1,12 @@
+// src/screens/HomeScreen.tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import _ from 'lodash';
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation, tests: initialTests }) {
   const drawerNavigation = useNavigation();
-  const [tests, setTests] = useState([]);
+  const [tests, setTests] = useState(initialTests || []);
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
@@ -16,34 +18,34 @@ export default function HomeScreen({ navigation }) {
     });
   }, [navigation, drawerNavigation]);
 
-  // ============================
-  //  POBIERANIE LISTY TESTÓW
-  // ============================
   useEffect(() => {
-    fetch("https://tgryl.pl/quiz/tests")
-      .then(res => res.json())
-      .then(data => setTests(data))
-      .catch(err => console.error("Błąd pobierania testów:", err));
-  }, []);
+    setTests(_.shuffle(initialTests || []));
+  }, [initialTests]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setTests(prev => _.shuffle(prev));
+    }, [])
+  );
 
   return (
     <View style={styles.container}>
       <View style={styles.buttonsContainer}>
-
         <FlatList
           data={tests}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.button}
-              onPress={() => navigation.navigate('Test', { id: item.id })}
+              onPress={() => drawerNavigation.navigate('Test', { id: item.id })}
             >
               <Text style={styles.buttonText}>{item.name}</Text>
-              <Text style={styles.desc}>{item.tags.join(", ")}</Text>
+              <Text style={styles.desc}>
+                {(Array.isArray(item.tags) ? item.tags : []).join(', ')}
+              </Text>
             </TouchableOpacity>
           )}
         />
-
       </View>
 
       <TouchableOpacity

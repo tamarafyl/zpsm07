@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import _ from 'lodash';
 
 export default function TestScreen({ navigation, addResult }) {
   const drawerNavigation = useNavigation();
   const route = useRoute();
 
-  // id тесту з HomeScreen
   const { id } = route.params;
 
-  // ============================
-  //  СТАНИ
-  // ============================
   const [test, setTest] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [type, setType] = useState("");
@@ -20,9 +17,8 @@ export default function TestScreen({ navigation, addResult }) {
   const [score, setScore] = useState(0);
   const [time, setTime] = useState(30);
 
-  // ============================
-  //  HEADER (drawer)
-  // ============================
+  const [shuffledAnswers, setShuffledAnswers] = useState([]);
+
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
@@ -33,23 +29,17 @@ export default function TestScreen({ navigation, addResult }) {
     });
   }, [navigation, drawerNavigation]);
 
-  // ============================
-  //  ЗАВАНТАЖЕННЯ ТЕСТУ З API
-  // ============================
   useEffect(() => {
     fetch(`https://tgryl.pl/quiz/test/${id}`)
       .then(res => res.json())
       .then(data => {
         setTest(data);
-        setQuestions(data.tasks);
+        setQuestions(_.shuffle(data.tasks));
         setType(data.name);
       })
       .catch(err => console.error("Błąd pobierania testu:", err));
   }, [id]);
 
-  // ============================
-  //  RESET ПРИ ПОВТОРНОМУ ВХОДІ
-  // ============================
   useFocusEffect(
     React.useCallback(() => {
       setCurrentIndex(0);
@@ -58,9 +48,6 @@ export default function TestScreen({ navigation, addResult }) {
     }, [])
   );
 
-  // ============================
-  //  ТАЙМЕР
-  // ============================
   useEffect(() => {
     if (questions.length === 0) return;
 
@@ -77,26 +64,29 @@ export default function TestScreen({ navigation, addResult }) {
     return () => clearInterval(interval);
   }, [currentIndex, questions]);
 
- if (!test) {
-   return (
-     <View style={styles.container}>
-       <Text style={styles.questionText}>Ładowanie testu...</Text>
-     </View>
-   );
- }
-
-
-
-
-
+  // 🔹 ВСЕ, ЩО ЗАЛЕЖИТЬ ВІД questions, РАХУЄМО ДО return
   const totalQuestions = questions.length;
   const currentQuestionNumber = currentIndex + 1;
-  const questionData = questions[currentIndex] || null;
+  const questionData = questions[currentIndex];
 
+  // 🔹 SHUFFLE ВІДПОВІДЕЙ — ТЕЖ ДО return
+  useEffect(() => {
+    if (!questionData) {
+      setShuffledAnswers([]);
+      return;
+    }
+    setShuffledAnswers(_.shuffle(questionData.answers));
+  }, [currentIndex, questionData]);
 
-  // ============================
-  //  ВІДПРАВКА РЕЗУЛЬТАТУ (POST)
-  // ============================
+  // 🔹 ТЕПЕР УМОВНИЙ return ЙДЕ ПІСЛЯ ВСІХ ХУКІВ
+  if (!test || questions.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.questionText}>Ładowanie testu...</Text>
+      </View>
+    );
+  }
+
   const sendResult = async (finalScore) => {
     try {
       const response = await fetch("https://tgryl.pl/quiz/result/", {
@@ -106,21 +96,17 @@ export default function TestScreen({ navigation, addResult }) {
           nick: "tamarafyl",
           score: finalScore,
           total: totalQuestions,
-          type: type, // ← правильний type з API
+          type: type,
         }),
       });
 
       const text = await response.text();
       console.log("Odpowiedź serwera:", text);
-
     } catch (error) {
       console.error("Błąd wysyłania:", error);
     }
   };
 
-  // ============================
-  //  ПЕРЕХІД ДО НАСТУПНОГО ПИТАННЯ
-  // ============================
   const handleNextQuestion = (points = 1) => {
     const newScore = score + points;
     setScore(newScore);
@@ -131,13 +117,15 @@ export default function TestScreen({ navigation, addResult }) {
     } else {
       sendResult(newScore);
 
-      addResult({
-        nick: "tamarafyl",
-        score: newScore,
-        total: totalQuestions,
-        type: type,
-        date: new Date().toLocaleDateString(),
-      });
+      setTimeout(() => {
+        addResult({
+          nick: "tamarafyl",
+          score: newScore,
+          total: totalQuestions,
+          type: type,
+          date: new Date().toLocaleDateString(),
+        });
+      }, 0);
 
       navigation.navigate('Results');
     }
@@ -164,7 +152,7 @@ export default function TestScreen({ navigation, addResult }) {
       <Text style={styles.questionText}>{questionData.question}</Text>
 
       <View style={styles.answersBox}>
-        {questionData.answers.map((ans, i) => (
+        {shuffledAnswers.map((ans, i) => (
           <TouchableOpacity
             key={i}
             style={styles.answerButton}

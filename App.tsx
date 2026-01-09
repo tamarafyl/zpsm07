@@ -1,60 +1,107 @@
+// App.tsx
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+
 import DrawerNavigator from './src/navigation/DrawerNavigator';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import SplashScreen from './src/screens/SplashScreen';
 
+import { initTestsLocal, saveTestsLocal, loadTestsLocal } from './src/database/testsLocal';
+import { getTests } from './src/services/quizService';
+
 export default function App() {
-  // Głobálny stan rezultatów
-  const [results, setResults] = useState<Array<{ testId: number, testName: string, points: number, date: string }>>([]);
+  const [results, setResults] = useState<any[]>([]);
+  const [tests, setTests] = useState<any[]>([]);
 
-  // Stan dla splash screen'u
   const [showSplash, setShowSplash] = useState(true);
-
-  // Stан для perewírki czy pervyy zapusk
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null);
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
 
+  // 🔵 Monitorowanie internetu
   useEffect(() => {
-    // Perewírka czy to pervyy zapusk
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsConnected(state.isConnected);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 🔵 Inicjalizacja lokalnej bazy
+  useEffect(() => {
+    (async () => {
+      await initTestsLocal();
+    })();
+  }, []);
+
+  // 🔵 Sprawdzenie pierwszego uruchomienia
+  useEffect(() => {
     AsyncStorage.getItem('hasLaunched').then(value => {
-      if (value === null) {
-        setIsFirstLaunch(true);
-      } else {
-        setIsFirstLaunch(false);
-      }
+      setIsFirstLaunch(value === null);
     });
   }, []);
 
-  const handleSplashFinish = () => {
-    setShowSplash(false);
-  };
+  const handleSplashFinish = () => setShowSplash(false);
 
   const handleAcceptRegulamin = async () => {
-    // Zberigayemo scho korystuvalch uzhe bachyy regulamin
     await AsyncStorage.setItem('hasLaunched', 'true');
     setIsFirstLaunch(false);
   };
 
-  // Pokazuyemo splash screen pervyye 3 sekundy
-  if (showSplash) {
-    return <SplashScreen onFinish={handleSplashFinish} />;
-  }
+  // 🔵 Synchronizacja testów z API lub offline fallback
+  const syncTests = async () => {
+    try {
+      // 🔴 Brak internetu → używamy tylko lokalnych testów
+      if (!isConnected) {
+        console.log('📴 Brak internetu — używam testów lokalnych');
+        const localTests = await loadTestsLocal();
+        setTests(localTests);
+        return;
+      }
 
-  // Pokazuyemo loader poky perevíryayemo
-  if (isFirstLaunch === null) {
-    return null;
-  }
+      // 🔵 Jest internet → sprawdzamy synchronizację
+      const lastSync = await AsyncStorage.getItem('lastSync');
+      const now = Date.now();
+      const oneDay = 24 * 60 * 60 * 1000;
 
-  // Yakscho pervyy zapusk - pokazuyemo WelcomeScreen
-  if (isFirstLaunch) {
-    return <WelcomeScreen onAccept={handleAcceptRegulamin} />;
-  }
+      if (!lastSync || now - Number(lastSync) > oneDay) {
+        console.log('🌐 Pobieram testy z API...');
+        const data = await getTests();
+        await saveTestsLocal(data);
+        await AsyncStorage.setItem('lastSync', String(now));
+        console.log('✅ Testy zapisane lokalnie (AsyncStorage)');
+      } else {
+        console.log('⏩ Używam testów z lokalnego storage (ostatnia synchronizacja < 24h)');
+      }
 
-  // Inaksche pokazuyemo osnovnyy dodatok
+      const localTests = await loadTestsLocal();
+      setTests(localTests);
+
+    } catch (err) {
+      console.error('❌ Błąd synchronizacji testów:', err);
+    }
+  };
+
+  // 🔵 Uruchamiamy synchronizację dopiero po Splash + Welcome + znanym statusie internetu
+  useEffect(() => {
+    if (!showSplash && isFirstLaunch === false && isConnected !== null) {
+      syncTests();
+    }
+  }, [showSplash, isFirstLaunch, isConnected]);
+
+  // 🔵 Ekrany startowe
+  if (showSplash) return <SplashScreen onFinish={handleSplashFinish} />;
+  if (isFirstLaunch === null) return null;
+  if (isFirstLaunch) return <WelcomeScreen onAccept={handleAcceptRegulamin} />;
+
+  // 🔵 Główna nawigacja
   return (
     <NavigationContainer>
-      <DrawerNavigator results={results} addResult={(res) => setResults(prev => [...prev, res])} />
+      <DrawerNavigator
+        tests={tests}
+        results={results}
+        addResult={(res) => setResults(prev => [...prev, res])}
+      />
     </NavigationContainer>
   );
 }
